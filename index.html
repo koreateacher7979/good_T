@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>학급 운영 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap');
+        body { font-family: 'Nanum Gothic', sans-serif; background-color: #eff6ff; }
+        .glass-card { background: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-800 pb-10">
+
+    <!-- Top Navigation -->
+    <nav class="bg-blue-600 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center flex-wrap">
+            <div class="flex items-center space-x-3 mb-2 sm:mb-0">
+                <i class="fa-solid fa-chart-pie text-2xl text-blue-200"></i>
+                <h1 class="text-xl font-bold"><span id="schoolNameDisplay">OO학교</span> 학급 관찰 대시보드</h1>
+            </div>
+            <div class="text-blue-200 text-xs font-bold bg-blue-700 px-3 py-1 rounded-full">
+                개발자: 가치있는 미래교육 연구소 대표 김병찬
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 mt-6">
+        
+        <!-- Class Selector -->
+        <div class="glass-card p-6 mb-6 flex flex-col sm:flex-row justify-between items-center border-l-4 border-blue-500">
+            <div class="mb-4 sm:mb-0">
+                <h2 class="text-lg font-bold text-gray-700"><i class="fa-solid fa-chalkboard-user mr-2 text-blue-500"></i>우리 반 현황 보기</h2>
+                <p class="text-sm text-gray-500">담임 학급을 선택하시면 데이터가 로드됩니다.</p>
+            </div>
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
+                <select id="classSelect" class="flex-1 sm:w-48 px-4 py-2 rounded-lg border-2 border-blue-100 focus:border-blue-500 outline-none font-bold text-blue-800">
+                    <option value="" disabled selected>학급 선택하기</option>
+                </select>
+                <button id="refreshBtn" class="bg-blue-100 hover:bg-blue-200 text-blue-600 p-2 rounded-lg transition" title="새로고침">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Content (Hidden initially) -->
+        <div id="dashboardContent" class="hidden space-y-6">
+            
+            <!-- Summary Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass-card p-6 flex items-center justify-between border-b-4 border-blue-500">
+                    <div>
+                        <p class="text-sm text-gray-500 font-bold mb-1">총 관찰 기록</p>
+                        <h3 class="text-3xl font-black text-gray-800" id="totalCount">0<span class="text-sm font-normal text-gray-500 ml-1">건</span></h3>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-500 text-xl">
+                        <i class="fa-solid fa-clipboard-list"></i>
+                    </div>
+                </div>
+                <div class="glass-card p-6 flex items-center justify-between border-b-4 border-green-500">
+                    <div>
+                        <p class="text-sm text-gray-500 font-bold mb-1">칭찬 (긍정)</p>
+                        <h3 class="text-3xl font-black text-green-600" id="goodCount">0<span class="text-sm font-normal text-gray-500 ml-1">건</span></h3>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-500 text-xl">
+                        <i class="fa-solid fa-thumbs-up"></i>
+                    </div>
+                </div>
+                <div class="glass-card p-6 flex items-center justify-between border-b-4 border-red-500">
+                    <div>
+                        <p class="text-sm text-gray-500 font-bold mb-1">지적 (부정)</p>
+                        <h3 class="text-3xl font-black text-red-600" id="badCount">0<span class="text-sm font-normal text-gray-500 ml-1">건</span></h3>
+                    </div>
+                    <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-500 text-xl">
+                        <i class="fa-solid fa-circle-exclamation"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Ratio Chart -->
+                <div class="glass-card p-6 lg:col-span-1 flex flex-col items-center">
+                    <h3 class="text-md font-bold text-gray-700 w-full mb-4">칭찬/지적 비율</h3>
+                    <div class="relative w-48 h-48">
+                        <canvas id="ratioChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Student Chart -->
+                <div class="glass-card p-6 lg:col-span-2">
+                    <h3 class="text-md font-bold text-gray-700 mb-4">학생별 누적 현황</h3>
+                    <div class="relative w-full h-64">
+                        <canvas id="studentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed List & Filters -->
+            <div class="glass-card overflow-hidden">
+                <div class="bg-gray-50 p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <h3 class="text-md font-bold text-gray-700"><i class="fa-solid fa-list-ul mr-2"></i>세부 기록 내역</h3>
+                    
+                    <!-- Filters -->
+                    <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                        <input type="date" id="filterDate" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-blue-500 bg-white">
+                        <select id="filterTeacher" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-blue-500 bg-white">
+                            <option value="">모든 교사</option>
+                        </select>
+                        <select id="filterType" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-blue-500 bg-white">
+                            <option value="">전체 (칭찬/지적)</option>
+                            <option value="칭찬">칭찬만</option>
+                            <option value="지적">지적만</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto hide-scroll">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+                                <th class="px-6 py-3 font-bold">일시</th>
+                                <th class="px-6 py-3 font-bold">학생</th>
+                                <th class="px-6 py-3 font-bold">기록 교사</th>
+                                <th class="px-6 py-3 font-bold">분류</th>
+                                <th class="px-6 py-3 font-bold">내용</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordsTableBody" class="text-sm divide-y divide-gray-100">
+                            <!-- 로딩 또는 빈 데이터 -->
+                            <tr><td colspan="5" class="px-6 py-8 text-center text-gray-400">학급을 선택해 주세요.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col justify-center items-center hidden">
+        <i class="fa-solid fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+        <p class="text-blue-800 font-bold">데이터를 불러오는 중입니다...</p>
+    </div>
+
+    <script>
+        // ✅ 선생님의 실제 웹앱 URL이 적용되어 있습니다.
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbygDCRwbgUvqw5sp-RJJhT0hslD2o9EQ4Io0tPDIE9BI10oJCe6xWkxlTZzWutdCxQ/exec'; 
+
+        let rawRecords = []; // 원본 데이터
+        let ratioChartObj = null;
+        let studentChartObj = null;
+
+        // DOM Elements
+        const classSelect = document.getElementById('classSelect');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const dashboardContent = document.getElementById('dashboardContent');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        // Filter Elements
+        const filterDate = document.getElementById('filterDate');
+        const filterTeacher = document.getElementById('filterTeacher');
+        const filterType = document.getElementById('filterType');
+
+        // 초기화
+        async function init() {
+            showLoading(true);
+            try {
+                // 테스트 모드 처리
+                if (SCRIPT_URL === '여기에_웹앱_URL을_입력하세요' || !SCRIPT_URL.startsWith('http')) {
+                    setTimeout(() => {
+                        document.getElementById('schoolNameDisplay').innerText = "테스트(미연동)";
+                        const mockClasses = ["1-1", "1-2"];
+                        mockClasses.forEach(c => {
+                            const opt = document.createElement('option');
+                            opt.value = c; opt.textContent = c;
+                            classSelect.appendChild(opt);
+                        });
+                        alert("미리보기 모드로 실행되었습니다.");
+                        showLoading(false);
+                    }, 500);
+                    return;
+                }
+
+                const res = await fetch(`${SCRIPT_URL}?action=getInitData`);
+                const data = await res.json();
+                
+                document.getElementById('schoolNameDisplay').innerText = data.schoolName;
+                
+                // 🚨 버그 수정: 스프레드시트가 '1-1'을 날짜로 자동 변환한 경우 '1-1' 텍스트로 복구
+                const classes = Object.keys(data.classesData);
+                classes.forEach(className => {
+                    let cleanClassName = className;
+                    if (typeof className === 'string' && (className.includes('GMT') || className.includes('Z') || className.includes('표준시'))) {
+                        const dateTest = new Date(className);
+                        if (!isNaN(dateTest)) {
+                            cleanClassName = `${dateTest.getMonth() + 1}-${dateTest.getDate()}`;
+                        }
+                    }
+
+                    const opt = document.createElement('option');
+                    opt.value = cleanClassName; opt.textContent = cleanClassName;
+                    classSelect.appendChild(opt);
+                });
+
+                // 필터용 교사 목록
+                data.teachers.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t; opt.textContent = t;
+                    filterTeacher.appendChild(opt);
+                });
+
+            } catch (err) {
+                console.error(err);
+                alert("초기 데이터를 불러오는데 실패했습니다.");
+            }
+            showLoading(false);
+        }
+
+        // 특정 학급 데이터 불러오기
+        async function loadClassData(className) {
+            showLoading(true);
+            dashboardContent.classList.remove('hidden');
+            
+            if (SCRIPT_URL === '여기에_웹앱_URL을_입력하세요' || !SCRIPT_URL.startsWith('http')) {
+                setTimeout(() => {
+                    // 가짜 데이터 생성
+                    rawRecords = [
+                        {timestamp: "2024-05-18 10:00", teacher: "김교사", className: className, student: "홍길동", type: "칭찬", content: "수업 태도가 바름"},
+                        {timestamp: "2024-05-18 11:00", teacher: "이교사", className: className, student: "이순신", type: "지적", content: "떠듦"}
+                    ];
+                    updateDashboard();
+                    showLoading(false);
+                }, 500);
+                return;
+            }
+
+            try {
+                // 🚨 백엔드(GAS)에서 데이터를 가져올 때 날짜로 변환된 학급명 처리
+                // 1. 현재 학급 선택 값을 그대로 전달
+                const res = await fetch(`${SCRIPT_URL}?action=getRecords&className=${encodeURIComponent(className)}`);
+                let records = await res.json();
+                
+                // 2. 만약 데이터가 없다면, 날짜 형식으로 저장된 데이터가 있는지 확인을 위해 전체 데이터를 가져와서 클라이언트에서 필터링
+                if(records.length === 0) {
+                     const allRes = await fetch(`${SCRIPT_URL}?action=getRecords`);
+                     const allRecords = await allRes.json();
+                     
+                     records = allRecords.filter(r => {
+                         let recordClassName = r.className;
+                         // DB에 저장된 클래스명이 날짜 형식인 경우
+                         if (typeof recordClassName === 'string' && (recordClassName.includes('GMT') || recordClassName.includes('Z') || recordClassName.includes('Jan') || recordClassName.includes('-01-'))) {
+                             const dateTest = new Date(recordClassName);
+                             if (!isNaN(dateTest)) {
+                                 recordClassName = `${dateTest.getMonth() + 1}-${dateTest.getDate()}`;
+                             }
+                         }
+                         return recordClassName === className;
+                     });
+                }
+                
+                rawRecords = records;
+                updateDashboard();
+            } catch (err) {
+                console.error(err);
+                alert("데이터를 불러오는데 실패했습니다.");
+            }
+            showLoading(false);
+        }
+
+        // 대시보드 업데이트 (필터 적용)
+        function updateDashboard() {
+            // 필터 읽기
+            const dateVal = filterDate.value;
+            const teacherVal = filterTeacher.value;
+            const typeVal = filterType.value;
+
+            // 데이터 필터링
+            let filtered = rawRecords.filter(r => {
+                let match = true;
+                if (dateVal && !r.timestamp.startsWith(dateVal)) match = false;
+                if (teacherVal && r.teacher !== teacherVal) match = false;
+                if (typeVal && r.type !== typeVal) match = false;
+                return match;
+            });
+
+            // 1. 요약 카드 업데이트
+            const goodCount = filtered.filter(r => r.type === '칭찬').length;
+            const badCount = filtered.filter(r => r.type === '지적').length;
+            document.getElementById('totalCount').innerText = filtered.length;
+            document.getElementById('goodCount').innerText = goodCount;
+            document.getElementById('badCount').innerText = badCount;
+
+            // 2. 테이블 렌더링
+            renderTable(filtered);
+
+            // 3. 차트 렌더링
+            renderCharts(filtered, goodCount, badCount);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('recordsTableBody');
+            tbody.innerHTML = '';
+            
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-400">조건에 맞는 기록이 없습니다.</td></tr>`;
+                return;
+            }
+
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-blue-50 transition';
+                
+                const typeBadge = item.type === '칭찬' 
+                    ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded-md text-xs font-bold"><i class="fa-solid fa-thumbs-up mr-1"></i>칭찬</span>`
+                    : `<span class="bg-red-100 text-red-700 px-2 py-1 rounded-md text-xs font-bold"><i class="fa-solid fa-circle-exclamation mr-1"></i>지적</span>`;
+
+                // 날짜 포맷 자르기 (초 단위 제거)
+                const shortDate = item.timestamp.substring(0, 16);
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${shortDate}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-800">${item.student}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-600">${item.teacher} 선생님</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${typeBadge}</td>
+                    <td class="px-6 py-4 text-gray-700 break-keep">${item.content}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderCharts(data, good, bad) {
+            Chart.defaults.font.family = "'Nanum Gothic', sans-serif";
+            
+            // 비율 파이 차트
+            if(ratioChartObj) ratioChartObj.destroy();
+            const ctxRatio = document.getElementById('ratioChart').getContext('2d');
+            ratioChartObj = new Chart(ctxRatio, {
+                type: 'doughnut',
+                data: {
+                    labels: ['칭찬', '지적'],
+                    datasets: [{
+                        data: [good, bad],
+                        backgroundColor: ['#22c55e', '#ef4444'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            // 학생별 현황 바 차트 데이터 가공
+            const studentStats = {};
+            data.forEach(item => {
+                if(!studentStats[item.student]) studentStats[item.student] = { good: 0, bad: 0 };
+                if(item.type === '칭찬') studentStats[item.student].good++;
+                else if(item.type === '지적') studentStats[item.student].bad++;
+            });
+
+            const labels = Object.keys(studentStats).sort();
+            const goodData = labels.map(l => studentStats[l].good);
+            const badData = labels.map(l => studentStats[l].bad);
+
+            if(studentChartObj) studentChartObj.destroy();
+            const ctxStudent = document.getElementById('studentChart').getContext('2d');
+            studentChartObj = new Chart(ctxStudent, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: '칭찬', data: goodData, backgroundColor: '#4ade80', borderRadius: 4 },
+                        { label: '지적', data: badData, backgroundColor: '#f87171', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } }
+                    },
+                    plugins: { legend: { position: 'top' } }
+                }
+            });
+        }
+
+        // 로딩 UI 제어
+        function showLoading(show) {
+            if (show) loadingOverlay.classList.remove('hidden');
+            else loadingOverlay.classList.add('hidden');
+        }
+
+        // 이벤트 리스너
+        classSelect.addEventListener('change', (e) => loadClassData(e.target.value));
+        refreshBtn.addEventListener('click', () => {
+            if(classSelect.value) loadClassData(classSelect.value);
+        });
+        
+        // 필터 변경 시 차트 및 테이블만 업데이트 (서버요청 안함)
+        filterDate.addEventListener('change', updateDashboard);
+        filterTeacher.addEventListener('change', updateDashboard);
+        filterType.addEventListener('change', updateDashboard);
+
+        // 실행
+        window.onload = init;
+    </script>
+</body>
+</html>
