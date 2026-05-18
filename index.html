@@ -155,7 +155,6 @@
         let ratioChartObj = null;
         let studentChartObj = null;
         
-        let autoRefreshTimer = null; // 백그라운드 자동 갱신 타이머
         const REFRESH_INTERVAL = 3000; // 3초마다 갱신되도록 변경됨
 
         // DOM Elements
@@ -218,6 +217,27 @@
                     filterTeacher.appendChild(opt);
                 });
 
+                // ✅ 전역 백그라운드 자동 갱신 (3초마다 학교 이름 및 관찰 데이터 실시간 동기화)
+                setInterval(async () => {
+                    if (SCRIPT_URL === '여기에_웹앱_URL을_입력하세요' || !SCRIPT_URL.startsWith('http')) return;
+                    
+                    // 1. 학교 이름(설정) 실시간 갱신 (화면 깜빡임 없이 조용히)
+                    try {
+                        const initRes = await fetch(`${SCRIPT_URL}?action=getInitData`);
+                        const initData = await initRes.json();
+                        if (initData.schoolName) {
+                            document.getElementById('schoolNameDisplay').innerText = initData.schoolName;
+                        }
+                    } catch (e) {
+                        console.error("School Name Sync Error:", e);
+                    }
+
+                    // 2. 관찰 기록 데이터 실시간 갱신 (학급이 선택되어 있을 때만 조용히 갱신)
+                    if (classSelect.value) {
+                        loadClassData(classSelect.value, true);
+                    }
+                }, REFRESH_INTERVAL);
+
             } catch (err) {
                 console.error(err);
                 alert("초기 데이터를 불러오는데 실패했습니다.");
@@ -270,17 +290,30 @@
                      });
                 }
                 
-                // 데이터 갱신
-                rawRecords = records;
+                // 데이터 갱신 (시간 포맷 완벽 보정 추가)
+                rawRecords = records.map(r => {
+                    let cleanTime = String(r.timestamp);
+                    // YYYY-MM-DD HH:mm:ss 형태라면 정확하게 자르기
+                    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(cleanTime)) {
+                        r.timestamp = cleanTime.substring(0, 16);
+                    } else {
+                        // 다른 형식(UTC 등)일 경우 브라우저 로컬 시간대(한국시간)로 파싱하여 재생성
+                        const d = new Date(cleanTime);
+                        if (!isNaN(d) && cleanTime.trim() !== '') {
+                            const yyyy = d.getFullYear();
+                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                            const dd = String(d.getDate()).padStart(2, '0');
+                            const hh = String(d.getHours()).padStart(2, '0');
+                            const min = String(d.getMinutes()).padStart(2, '0');
+                            r.timestamp = `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+                        } else if (cleanTime.length >= 16) {
+                            r.timestamp = cleanTime.substring(0, 16);
+                        }
+                    }
+                    return r;
+                });
+                
                 updateDashboard();
-
-                // ✅ 최초 1회 로드 시, 백그라운드 자동 갱신 타이머 시작
-                if (!isSilent) {
-                    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-                    autoRefreshTimer = setInterval(() => {
-                        loadClassData(className, true); // true = 조용히 백그라운드 업데이트
-                    }, REFRESH_INTERVAL);
-                }
 
             } catch (err) {
                 console.error(err);
@@ -339,11 +372,8 @@
                     ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded-md text-xs font-bold"><i class="fa-solid fa-thumbs-up mr-1"></i>칭찬</span>`
                     : `<span class="bg-red-100 text-red-700 px-2 py-1 rounded-md text-xs font-bold"><i class="fa-solid fa-circle-exclamation mr-1"></i>지적</span>`;
 
-                // 날짜 포맷 자르기 (초 단위 제거)
-                const shortDate = item.timestamp.substring(0, 16);
-
                 tr.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${shortDate}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${item.timestamp}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-800">${item.student}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-gray-600">${item.teacher} 선생님</td>
                     <td class="px-6 py-4 whitespace-nowrap">${typeBadge}</td>
@@ -415,15 +445,13 @@
 
         // 이벤트 리스너
         classSelect.addEventListener('change', (e) => {
-            // 다른 반을 선택하면, 초기화 후 새로 로딩
-            if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+            // 수동으로 반 변경 시 새로 로딩 (타이머 취소는 하지 않음 - 전역 타이머가 돌기 때문)
             loadClassData(e.target.value, false);
         });
 
         refreshBtn.addEventListener('click', () => {
             if(classSelect.value) {
                 // 수동 새로고침 클릭 시 로딩창 띄우며 즉시 갱신
-                if (autoRefreshTimer) clearInterval(autoRefreshTimer);
                 loadClassData(classSelect.value, false);
             }
         });
