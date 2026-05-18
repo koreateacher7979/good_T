@@ -156,7 +156,7 @@
         let studentChartObj = null;
         
         let autoRefreshTimer = null; // 백그라운드 자동 갱신 타이머
-        const REFRESH_INTERVAL = 10000; // 10초마다 갱신
+        const REFRESH_INTERVAL = 3000; // 3초마다 갱신되도록 변경됨
 
         // DOM Elements
         const classSelect = document.getElementById('classSelect');
@@ -274,7 +274,7 @@
                 rawRecords = records;
                 updateDashboard();
 
-                // ✅ 최초 1회 로드 시, 백그라운드 자동 갱신 타이머 시작 (10초 주기)
+                // ✅ 최초 1회 로드 시, 백그라운드 자동 갱신 타이머 시작
                 if (!isSilent) {
                     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
                     autoRefreshTimer = setInterval(() => {
